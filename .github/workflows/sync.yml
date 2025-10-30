@@ -1,44 +1,63 @@
 name: Sync to Firebase Every 5 Minutes
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/5 * * * *'  # كل 5 دقائق
   workflow_dispatch:
 
 jobs:
   sync-data:
     runs-on: ubuntu-latest
     steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install firebase-admin axios
+
       - name: Sync Cases Data
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          echo "🔄 Fetching data from Google Script..."
+          # إنشاء ملف JSON من Secret
+          echo "$FIREBASE_SERVICE_ACCOUNT" > serviceAccountKey.json
 
-          # متابعة أي إعادة توجيه تلقائيًا للحصول على JSON النهائي
-          response=$(curl -s -L "https://script.google.com/macros/s/AKfycbwnhitq0HELiIr5FkOothi2q3V5YKyvl5aDcCpw__mDp3T238Ke350nFiQUlkIN_Ysz-A/exec?action=getCases")
+          # تنفيذ الكود مباشرة
+          node <<'EOF'
+          const admin = require("firebase-admin");
+          const axios = require("axios");
+          const serviceAccount = require("./serviceAccountKey.json");
 
-          echo ""
-          echo "🟢 Raw response from Google Script:"
-          echo "$response"
-          echo ""
+          admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            databaseURL: "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app"
+          });
 
-          # التحقق إذا كان الرد JSON صالح
-          if echo "$response" | jq empty 2>/dev/null; then
-            data="$response"
-            echo "✅ Valid JSON detected, ready to upload."
-          else
-            echo "⚠️ Invalid JSON detected, skipping upload."
-            exit 1
-          fi
+          const db = admin.database();
 
-          # رفع البيانات إلى Firebase باستخدام PATCH (تحديث/إضافة)
-          echo "✅ Uploading cases to Firebase..."
-          curl -X PATCH "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app/cases.json" \
-            -H "Content-Type: application/json" \
-            -d "$data"
+          async function syncCases() {
+            try {
+              console.log("🔄 Fetching data from Google Script...");
+              const response = await axios.get("https://script.google.com/macros/s/AKfycbwnhitq0HELiIr5FkOothi2q3V5YKyvl5aDcCpw__mDp3T238Ke350nFiQUlkIN_Ysz-A/exec?action=getCases");
+              
+              const data = response.data.data;
+              console.log("🟢 Data fetched successfully");
 
-          # تحديث وقت آخر مزامنة
-          timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          curl -X PUT "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app/lastSync.json" \
-            -H "Content-Type: application/json" \
-            -d "{\"timestamp\":\"$timestamp\"}"
+              if (data && data.length) {
+                await db.ref("cases").set(data);
+                console.log("✅ Data uploaded to Firebase");
 
-          echo "✅ lastSync updated: $timestamp"
+                const timestamp = new Date().toISOString();
+                await db.ref("lastSync").set({ timestamp });
+                console.log("✅ lastSync updated:", timestamp);
+              } else {
+                console.log("⚠️ No valid data found, skipping upload.");
+              }
+            } catch (err) {
+              console.error("❌ Error:", err);
+            }
+          }
+
+          syncCases();
+          EOF
