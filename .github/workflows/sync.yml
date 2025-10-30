@@ -11,4 +11,4 @@ jobs:
       - name: Sync Cases Data
         run: |
           response=$(curl -s "https://script.google.com/macros/s/AKfycbwnhitq0HELiIr5FkOothi2q3V5YKyvl5aDcCpw__m3Dp3T238Ke350nFiQUlkIN_Ysz-A/exec?action=getCases")
-          curl -X PUT "https://smile-art-lab-default-rtdb.firebaseio.com/cases.json" -d "$response"
+          curl -X PUT "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app/cases.json" -d "$response"
