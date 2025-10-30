@@ -8,27 +8,29 @@ jobs:
   sync-data:
     runs-on: ubuntu-latest
     steps:
-      - name: Sync Cases Data
+      - name: Debug Google Script Response
         run: |
           echo "🔄 Fetching data from Google Script..."
           response=$(curl -s "https://script.google.com/macros/s/AKfycbwnhitq0HELiIr5FkOothi2q3V5YKyvl5aDcCpw__mDp3T238Ke350nFiQUlkIN_Ysz-A/exec?action=getCases")
 
-          echo "Response received."
-          # استخراج الجزء بين "data":[ و آخر ]
-          data=$(echo "$response" | grep -o '\["id":[^]]*]' || true)
+          echo ""
+          echo "🟢 Raw response from Google Script:"
+          echo "$response"
+          echo ""
 
-          # لو grep فشل (يعني ما طلع بيانات) جرّب طريقة احتياطية
-          if [ -z "$data" ]; then
-            data=$(echo "$response" | sed -e 's/^.*"data"://' -e 's/}}$/}/')
-          fi
+          # استخراج المصفوفة من data
+          data=$(echo "$response" | sed 's/^{"success":true,"data"://' | sed 's/}$//')
 
-          # التحقق من أن البيانات فعلاً مصفوفة JSON
-          if echo "$data" | grep -q '^\['; then
-            echo "✅ Data extracted, uploading to Firebase..."
+          echo "🟢 Extracted data:"
+          echo "$data"
+          echo ""
+
+          # رفع فقط لو البيانات مش فاضية
+          if [ -n "$data" ] && [ "$data" != "null" ]; then
+            echo "✅ Uploading to Firebase..."
             curl -X PUT "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app/cases.json" \
               -H "Content-Type: application/json" \
               -d "$data"
           else
-            echo "⚠️ Failed to extract data correctly. Response was:"
-            echo "$response"
+            echo "⚠️ No valid data found, skipping upload."
           fi
