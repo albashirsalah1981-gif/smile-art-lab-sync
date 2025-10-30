@@ -1,7 +1,7 @@
 name: Sync to Firebase Every 5 Minutes
 on:
   schedule:
-    - cron: '*/5 * * * *'  # كل 5 دقائق
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -11,36 +11,34 @@ jobs:
       - name: Sync Cases Data
         run: |
           echo "🔄 Fetching data from Google Script..."
-          
-          # الرابط المباشر للـ Google Script JSON بعد استبدال user_content_key
-          response=$(curl -s "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLi9DLVgRhH8ubfNpuCcfzOhCgrXjOQEIM6L02T1BzA9wKphp8hN8rDgpG7qxuTSwzTfFZdZhLEmDig7cRz_su9a_yPsaSAb3EC8fuIf7JV2GIY2NYtbaTWPzL-Uzw0M3EpPCCZ5cIsZPhg041VxOSbbINrlXkbTOcA-j1gjwvxwCJSwrTJUc-HF8D8RtFPA4xE7KlOiY8bZXrsifr6CCmWkcBcNxL_bDOmkEvuPWprZtLRUDpSYNs9GWdnGqVQgEXXyYA4MGrMxgX3qa1m4C_4oYp1kJu2MuHfiNHfRDA616W6M-1KBnfujv7_WYQ&lib=M7PLAKg05u8P8SsJScYAH25Qpz9s9UeNf")
+
+          # متابعة أي إعادة توجيه تلقائيًا للحصول على JSON النهائي
+          response=$(curl -s -L "https://script.google.com/macros/s/AKfycbwnhitq0HELiIr5FkOothi2q3V5YKyvl5aDcCpw__mDp3T238Ke350nFiQUlkIN_Ysz-A/exec?action=getCases")
 
           echo ""
           echo "🟢 Raw response from Google Script:"
           echo "$response"
           echo ""
 
-          # استخراج المصفوفة داخل data (JSON)
-          data=$(echo "$response" | sed 's/^{"success":true,"data"://' | sed 's/}$//')
-
-          echo "🟢 Extracted data:"
-          echo "$data"
-          echo ""
-
-          # رفع البيانات إلى Firebase فقط إذا كانت صالحة
-          if [ -n "$data" ] && [ "$data" != "null" ]; then
-            echo "✅ Uploading cases to Firebase..."
-            curl -X PATCH "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app/cases.json" \
-              -H "Content-Type: application/json" \
-              -d "$data"
-
-            # تحديث وقت آخر مزامنة
-            timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-            curl -X PUT "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app/lastSync.json" \
-              -H "Content-Type: application/json" \
-              -d "{\"timestamp\":\"$timestamp\"}"
-
-            echo "✅ lastSync updated: $timestamp"
+          # التحقق إذا كان الرد JSON صالح
+          if echo "$response" | jq empty 2>/dev/null; then
+            data="$response"
+            echo "✅ Valid JSON detected, ready to upload."
           else
-            echo "⚠️ No valid data found, skipping upload."
+            echo "⚠️ Invalid JSON detected, skipping upload."
+            exit 1
           fi
+
+          # رفع البيانات إلى Firebase باستخدام PATCH (تحديث/إضافة)
+          echo "✅ Uploading cases to Firebase..."
+          curl -X PATCH "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app/cases.json" \
+            -H "Content-Type: application/json" \
+            -d "$data"
+
+          # تحديث وقت آخر مزامنة
+          timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          curl -X PUT "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app/lastSync.json" \
+            -H "Content-Type: application/json" \
+            -d "{\"timestamp\":\"$timestamp\"}"
+
+          echo "✅ lastSync updated: $timestamp"
