@@ -10,7 +10,18 @@ jobs:
     steps:
       - name: Sync Cases Data
         run: |
+          echo "🔄 Fetching data from Google Script..."
           response=$(curl -s "https://script.google.com/macros/s/AKfycbwnhitq0HELiIr5FkOothi2q3V5YKyvl5aDcCpw__mDp3T238Ke350nFiQUlkIN_Ysz-A/exec?action=getCases")
-          # إزالة الـ wrapper يدوياً
+
+          # استخراج المصفوفة من داخل {"success":true,"data":[ ... ]}
           data=$(echo "$response" | sed 's/^{"success":true,"data"://' | sed 's/}$//')
-          curl -X PUT "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app/cases.json" -H "Content-Type: application/json" -d "$data"
+
+          # التحقق من أن البيانات غير فارغة
+          if [ -n "$data" ] && [ "$data" != "null" ]; then
+            echo "✅ تم استخراج البيانات، جاري رفعها إلى Firebase..."
+            curl -X PUT "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app/cases.json" \
+              -H "Content-Type: application/json" \
+              -d "$data"
+          else
+            echo "⚠️ البيانات فاضية أو غير صالحة، تم تجاهل الرفع."
+          fi
