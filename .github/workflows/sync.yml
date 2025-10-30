@@ -8,6 +8,11 @@ jobs:
   sync-data:
     runs-on: ubuntu-latest
     steps:
+      - name: Install jq for JSON processing
+        run: sudo apt-get install -y jq
+        
       - name: Sync Cases Data
         run: |
-          curl -X PUT "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app/cases.json" -H "Content-Type: application/json" -d '$(curl -s "https://script.google.com/macros/s/AKfycbwnhitq0HELiIr5FkOothi2q3V5YKyvl5aDcCpw__mDp3T238Ke350nFiQUlkIN_Ysz-A/exec?action=getCases")'
+          response=$(curl -s "https://script.google.com/macros/s/AKfycbwnhitq0HELiIr5FkOothi2q3V5YKyvl5aDcCpw__mDp3T238Ke350nFiQUlkIN_Ysz-A/exec?action=getCases")
+          data=$(echo "$response" | jq -r '.data')
+          curl -X PUT "https://smile-art-lab-default-rtdb.europe-west1.firebasedatabase.app/cases.json" -H "Content-Type: application/json" -d "$data"
