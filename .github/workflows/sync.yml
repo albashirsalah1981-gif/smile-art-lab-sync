@@ -1,7 +1,7 @@
-name: Sync to Firebase Every Minute
+name: Sync to Firebase Every 5 Minutes
 on:
   schedule:
-    - cron: '* * * * *'  # كل دقيقة
+    - cron: '*/5 * * * *'  # كل 5 دقائق
   workflow_dispatch:
 
 jobs:
